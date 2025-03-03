@@ -1,160 +1,262 @@
+// notifier.c
 #include QMK_KEYBOARD_H
 #include "pattern_match.c"
 #include "notifier.h"
 #include "raw_hid.h"
-#include "print.h"
 #include <string.h>
+#ifdef CONSOLE_ENABLE
+#include "print.h"
+#endif
 
-    // Maximum size for the assembled command.
+// Maximum size for the assembled command.
 #define MSG_BUFFER_SIZE 256
+// Buffer to accumulate incoming data.
+static char msg_buffer[MSG_BUFFER_SIZE];
+// Current write index into the buffer.
+static uint16_t msg_index = 0;
 
-    // Buffer to accumulate incoming data.
-    static char msg_buffer[MSG_BUFFER_SIZE];
-    // Current write index into the buffer.
-    static uint16_t msg_index = 0;
+// Default empty map if user doesn't define them
+static command_map_t empty_command_map[1] = {0};
+static layer_map_t empty_layer_map[1] = {0};
 
-    // Default empty maps if user doesn't define them
-#if !defined(COMMAND_MAP_DEFINED)
-    command_map_t command_map[1] = {0};
-    const size_t command_map_size = 0;
-#endif
+// Default implementations that will be used if the user doesn't call DEFINE_SERIAL_COMMANDS/LAYERS
+__attribute__((weak)) command_map_t* get_command_map(void) {
+    return empty_command_map;
+}
 
-#if !defined(CUSTOM_LAYER_MAP)
-    layer_map_t layer_map[1] = {0};
-    const size_t layer_map_size = 0;
-#endif
+__attribute__((weak)) size_t get_command_map_size(void) {
+    return 0;
+}
+
+__attribute__((weak)) layer_map_t* get_layer_map(void) {
+    return empty_layer_map;
+}
+
+__attribute__((weak)) size_t get_layer_map_size(void) {
+    return 0;
+}
 
 #define LAYER_UNSET 255
-    uint8_t activated_layer = LAYER_UNSET;
+uint8_t activated_layer = LAYER_UNSET;
+// reference to currently active command:
+command_map_t *current_command = {0};
 
-    // reference to currently active command:
-    command_map_t *current_command = {0};
+void activate_layer(uint8_t layer) {
+    #ifdef CONSOLE_ENABLE
+    uprintf("Activating layer %d\n", layer);
+    #endif
+    layer_on(layer);
+    activated_layer = layer;
+}
 
-    void activate_layer(uint8_t layer) {
-        #ifdef CONSOLE_ENABLE
-        uprintf("Activating layer %d\n", layer);
-        #endif
-        layer_on(layer);
-        activated_layer = layer;
+void deactivate_layer(void) {
+    if (activated_layer == LAYER_UNSET) {
+        return;
     }
+    #ifdef CONSOLE_ENABLE
+    uprintf("Deactivating layer %d\n", activated_layer);
+    #endif
+    layer_off(activated_layer);
+    activated_layer = LAYER_UNSET;
+}
 
-    void deactivate_layer(void) {
-        if (activated_layer == LAYER_UNSET) {
-            return;
+void enable_command(command_map_t *command) {
+    current_command = command;
+    command->on_enable();
+}
+
+void disable_command(void) {
+    if (current_command != NULL && current_command->on_disable != NULL) {
+        current_command->on_disable();
+    }
+    current_command = NULL;
+}
+
+// Helper function to find unit delimiters in a string
+const char* find_first_delimiter(const char *str) {
+    for (const char *p = str; *p != '\0'; p++) {
+        if (*p == '=' || *p == ':' || *p == '|' || *p == '>') {  // Add any other delimiters here
+            return p;
         }
+    }
+    return NULL;
+}
 
-        #ifdef CONSOLE_ENABLE
-        uprintf("Deactivating layer %d\n", activated_layer);
-        #endif
-
-        layer_off(activated_layer);
-        activated_layer = LAYER_UNSET;
+// Helper function to split string by delimiter
+bool split_by_delimiter(const char *source, const char *delimiter_pos,
+                         char *left, size_t left_size,
+                         char *right, size_t right_size) {
+    if (!delimiter_pos) {
+        return false;
     }
 
-    void deactivate_all_commands(void) {
+    // Split source
+    size_t left_len = delimiter_pos - source;
+    if (left_len >= left_size) {
+        return false;
     }
 
-    void enable_command(command_map_t *command) {
-        current_command = command;
-        command->on_enable();
+    strncpy(left, source, left_len);
+    left[left_len] = '\0';
+
+    // Copy right part
+    if (strlen(delimiter_pos + 1) >= right_size) {
+        return false;
     }
 
-    void disable_command(void) {
-        if (current_command != NULL && current_command->on_disable != NULL) {
-            current_command->on_disable();
+    strcpy(right, delimiter_pos + 1);
+    return true;
+}
+
+// Generic function for pattern matching with delimiter support
+bool match_pattern(const char *pattern, const char *message, bool case_sensitive) {
+    const char *pattern_delimiter = find_first_delimiter(pattern);
+
+    if (pattern_delimiter == NULL) {
+        // No delimiter, use direct pattern matching
+        return pattern_match(pattern, message, case_sensitive);
+    }
+
+    // Pattern contains a delimiter, check if message has the same delimiter
+    char delimiter = *pattern_delimiter;
+    char *msg_delimiter_pos = NULL;
+
+    for (char *p = (char*)message; *p != '\0'; p++) {
+        if (*p == delimiter) {
+            msg_delimiter_pos = p;
+            break;
         }
-
-        current_command = NULL;
     }
 
+    if (msg_delimiter_pos == NULL) {
+        return false;  // Message doesn't have the delimiter
+    }
 
-    bool process_full_message(char *data) {
+    // Split both pattern and message
+    char pattern_left[256] = {0};
+    char pattern_right[256] = {0};
+    char msg_left[256] = {0};
+    char msg_right[256] = {0};
 
+    if (!split_by_delimiter(pattern, pattern_delimiter,
+                           pattern_left, sizeof(pattern_left),
+                           pattern_right, sizeof(pattern_right))) {
+        return false;
+    }
+
+    if (!split_by_delimiter(message, msg_delimiter_pos,
+                          msg_left, sizeof(msg_left),
+                          msg_right, sizeof(msg_right))) {
+        return false;
+    }
+
+    // Match both sides
+    return pattern_match(pattern_left, msg_left, case_sensitive) &&
+           pattern_match(pattern_right, msg_right, case_sensitive);
+}
+
+bool process_full_message(char *data) {
+    char received_command[256] = {0};
+    int length = strlen(data);
+    command_map_t *command_found = NULL;
+    uint8_t layer_found = LAYER_UNSET;
+    bool found_command_match = false;
+    bool found_layer_match = false;
+
+    if (length >= sizeof(received_command)) {
+        return false;
+    }
+
+    memcpy(received_command, data, length);
+    received_command[length] = '\0';
+
+    // Always disable current command first
+    disable_command();
+
+    // Get the current command map and size
+    command_map_t *cmd_map = get_command_map();
+    size_t cmd_map_size = get_command_map_size();
+
+    // Get the current layer map and size
+    layer_map_t *lyr_map = get_layer_map();
+    size_t lyr_map_size = get_layer_map_size();
+
+    // Command map checks
+    for (uint8_t i = 0; i < cmd_map_size; i++) {
+        if (match_pattern(cmd_map[i].pattern, received_command, cmd_map[i].case_sensitive)) {
+            found_command_match = true;
+            command_found = &cmd_map[i];
+            break;
         }
+    }
 
-        char received_command[256] = {0};
-        int length = strlen(data);
-        if (length < sizeof(received_command)) {
-            memcpy(received_command, data, length);
-            received_command[length] = '\0';
+    // Layer map checks
+    for (uint8_t i = 0; i < lyr_map_size; i++) {
+        if (match_pattern(lyr_map[i].pattern, received_command, lyr_map[i].case_sensitive)) {
+            found_layer_match = true;
+            layer_found = lyr_map[i].layer;
+            break;
+        }
+    }
 
-            bool found_command = false;
-            bool found_layer = false;
+    // Always deactivate the current layer first
+    deactivate_layer();
 
-            disable_command();
+    // Enable new command if found
+    if (found_command_match && command_found != NULL) {
+        enable_command(command_found);
+    }
 
-            for (uint8_t i = 0; i < command_map_size; i++) {
-                if (pattern_match(command_map[i].pattern, received_command, command_map[i].case_sensitive)) {
-                    found_command = true;
-                    enable_command(&command_map[i]);
-                    break;
-                }
-            }
+    // Activate new layer if found
+    if (found_layer_match && layer_found != LAYER_UNSET) {
+        activate_layer(layer_found);
+    }
 
-            for (uint8_t i = 0; i < layer_map_size; i++) {
-                if (pattern_match(layer_map[i].pattern, received_command, layer_map[i].case_sensitive)) {
-                    found_layer = true;
+    #ifdef CONSOLE_ENABLE
+    // replace all unit delimeters with |
+    for (int i = 0; i < strlen(received_command); i++) {
+        if (received_command[i] == GS_DELIMITER[0]) {
+            received_command[i] = '|';
+        }
+    }
 
-                    if (!layer_state_is(layer_map[i].layer)) {
-                        activate_layer(layer_map[i].layer);
-                    }
-                    break;
-                }
-            }
+    if (found_command_match) {
+        uprintf("Received command: %s\n", received_command);
+    } else if (!found_layer_match) {
+        uprintf("Unknown command: %s\n", received_command);
+    }
 
-            if(!found_command) {
-                deactivate_all_commands();
-            }
+    #endif
 
-            if (!(found_command || found_layer)) {
-                deactivate_layer();
-                return false;
-            }
+    return found_command_match || found_layer_match;
+}
 
-            #ifdef CONSOLE_ENABLE
-            if (found_command) {
-                uprintf("Received command: %s\n", received_command);
+void raw_hid_receive(uint8_t *data, uint8_t length) {
+    #define MAX_LOG_SIZE 32
+    // Process each byte of the incoming packet.
+    bool match = false;
+    for (uint8_t i = 0; i < length; i++) {
+        char c = (char)data[i];
+        // End of text (ASCII 3) indicates the end of the message.
+        if (c == ETX_TERMINATOR[0]) {
+            msg_buffer[msg_index] = '\0'; // Ensure the buffer is properly terminated
+            msg_index = 0; // Reset the buffer for the next message
+            match = process_full_message(msg_buffer);
+            break;
+        } else {
+            // Append character if space is available.
+            if (msg_index < (MSG_BUFFER_SIZE - 1)) {
+                msg_buffer[msg_index++] = c;
             } else {
-                uprintf("Unknown command: %s\n", received_command);
+                // Buffer overflow – reset the buffer to prevent corruption.
+                msg_index = 0;
             }
-
-            if (found_layer) {
-                uprintf("Enabling layer for %s\n", received_command);
-            }
-            #endif
-
-        }
-
-        return true;
-    }
-
-    void raw_hid_receive(uint8_t *data, uint8_t length) {
-        #define MAX_LOG_SIZE 32
-
-        // Process each byte of the incoming packet.
-        bool match = false;
-
-        for (uint8_t i = 0; i < length; i++) {
-            char c = (char)data[i];
-
-            // End of text (ASCII 3) indicates the end of the message.
-            if (c == ETX_TERMINATOR[0]) {
-                msg_buffer[msg_index] = '\0'; // Ensure the buffer is properly terminated
-                msg_index = 0; // Reset the buffer for the next message
-                match = process_full_message(msg_buffer);
-                break;
-            } else {
-                // Append character if space is available.
-                if (msg_index < (MSG_BUFFER_SIZE - 1)) {
-                    msg_buffer[msg_index++] = c;
-                } else {
-                    // Buffer overflow – reset the buffer to prevent corruption.
-                    msg_index = 0;
-                }
-            }
-        }
-
         }
     }
-
-
+    uint8_t response[length] = {};
+    response[0] = match;
+    for (uint8_t i = 1; i < length; i++) {
+        response[i] = 0;
+    }
+    raw_hid_send(response, length);
+}
