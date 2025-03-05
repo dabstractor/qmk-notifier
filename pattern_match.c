@@ -9,7 +9,11 @@ static bool ends_with_pattern(const char *pattern, const char *str, bool case_se
 
 bool pattern_match(const char *pattern, const char *str, bool case_sensitive) {
     // Always do an exact string comparison first
-    if (case_sensitive ? strcmp(pattern, str) == 0 : strcasecmp(pattern, str) == 0) {
+    bool exact_match = case_sensitive ?
+        (strcmp(pattern, str) == 0) :
+        (strcasecmp(pattern, str) == 0);
+
+    if (exact_match) {
         return true;
     }
 

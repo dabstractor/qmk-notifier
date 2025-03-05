@@ -32,7 +32,13 @@ git submodule add https://github.com/dabstractor/qmk-notifier.git
 In your `keymap.c` file:
 
 ```c
-include "qmk-notifier/notifier.h"
+#include "qmk-notifier/notifier.h"
+
+// ...
+
+void raw_hid_receive(uint8_t *data, uint8_t length) {
+    hid_notify(uint8_t *data, uint8_t length)
+}
 ```
 
 ### 3. Update your rules.mk
@@ -90,6 +96,11 @@ QMK-Notifier is designed to work with companion applications that send window in
 - [hyprland-qmk-window-notifier](https://github.com/dabstractor/hyprland-qmk-window-notifier) - Hyprland-specific utility that captures window changes
 
 For other environments, [zigotica/active-app-qmk-layer-updater](https://github.com/zigotica/active-app-qmk-layer-updater) offers support for Windows, macOS, and X11. MacOS and other Wayland environment support is planned for this project in the future.
+
+
+## Compatibility with Other Raw HID Modules
+
+QMK-Notifier is compatible with other raw HID modules. It identifies its own incoming messages by checking for the specific sequence of characters `0x81` followed by `0x9F` at the start of the message. Any messages that do not match this pattern are ignored, ensuring that it does not interfere with the operation of other modules on the same raw HID interface.
 
 ## Documentation
 

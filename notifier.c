@@ -75,7 +75,7 @@ void disable_command(void) {
 // Helper function to find unit delimiters in a string
 const char* find_first_delimiter(const char *str) {
     for (const char *p = str; *p != '\0'; p++) {
-        if (*p == '=' || *p == ':' || *p == '|' || *p == '>') {  // Add any other delimiters here
+        if (*p == GS_DELIMITER[0]) {  // Add any other delimiters here
             return p;
         }
     }
@@ -113,8 +113,31 @@ bool match_pattern(const char *pattern, const char *message, bool case_sensitive
     const char *pattern_delimiter = find_first_delimiter(pattern);
 
     if (pattern_delimiter == NULL) {
-        // No delimiter, use direct pattern matching
-        return pattern_match(pattern, message, case_sensitive);
+        // No delimiter in pattern
+        // But check if message has a delimiter
+        const char *msg_delimiter_pos = find_first_delimiter(message);
+
+        if (msg_delimiter_pos != NULL) {
+            // Message has a delimiter but pattern doesn't
+            // Match only against first part of message
+            char msg_left[256] = {0};
+            size_t left_len = msg_delimiter_pos - message;
+
+            if (left_len >= sizeof(msg_left)) {
+                return false;
+            }
+
+            strncpy(msg_left, message, left_len);
+            msg_left[left_len] = '\0';
+
+            // Match pattern against only first part of message
+            bool result = pattern_match(pattern, msg_left, case_sensitive);
+            return result;
+        }
+
+        // No delimiter in either string, use direct pattern matching
+        bool result = pattern_match(pattern, message, case_sensitive);
+        return result;
     }
 
     // Pattern contains a delimiter, check if message has the same delimiter
@@ -129,7 +152,20 @@ bool match_pattern(const char *pattern, const char *message, bool case_sensitive
     }
 
     if (msg_delimiter_pos == NULL) {
-        return false;  // Message doesn't have the delimiter
+        // Message doesn't have the delimiter
+        // But we should still try to match the part before the delimiter
+        char pattern_left[256] = {0};
+        size_t left_len = pattern_delimiter - pattern;
+
+        if (left_len >= sizeof(pattern_left)) {
+            return false;
+        }
+
+        strncpy(pattern_left, pattern, left_len);
+        pattern_left[left_len] = '\0';
+
+        // Only match the first part of the pattern against the entire message
+        return pattern_match(pattern_left, message, case_sensitive);
     }
 
     // Split both pattern and message
@@ -231,8 +267,36 @@ bool process_full_message(char *data) {
     return found_command_match || found_layer_match;
 }
 
-void raw_hid_receive(uint8_t *data, uint8_t length) {
-    #define MAX_LOG_SIZE 32
+
+void hid_notify(uint8_t *data, uint8_t length) {
+
+    // Check for our identifiers to ensure no conflicts with other libraries
+    if (length < 2 || data[0] != 0x81 || data[1] != 0x9F) {
+        return; // Discard the message if it doesn't match
+    }
+
+    // Strip off those 2 identifying characters
+    data += 2;
+    length -= 2;
+
+    #ifdef CONSOLE_ENABLE
+    printf("Received %d bytes: \n", length);
+    for (uint8_t i = 2; i < length; i++) {
+        if (data[i] == ETX_TERMINATOR[0]) {
+            printf("$");
+        } else if (data[i] == GS_DELIMITER[0]) {
+            printf(" | ");
+        } else if (data[i] == 0x81) {
+            printf("^");
+        } else if (data[i] == 0x9F) {
+            /* printf(" 0x9F "); */
+        } else {
+            uprintf("%c", data[i] % 256);
+        }
+    }
+    printf("\n");
+    #endif
+
     // Process each byte of the incoming packet.
     bool match = false;
     for (uint8_t i = 0; i < length; i++) {

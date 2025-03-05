@@ -38,3 +38,4 @@ size_t get_layer_map_size(void);
 
 // From QMK
 void raw_hid_receive(uint8_t* data, uint8_t length);
+void hid_notify(uint8_t* data, uint8_t length);
