@@ -112,6 +112,10 @@ bool split_by_delimiter(const char *source, const char *delimiter_pos,
 bool match_pattern(const char *pattern, const char *message, bool case_sensitive) {
     const char *pattern_delimiter = find_first_delimiter(pattern);
 
+    if (message == NULL || pattern == NULL) {
+        return false;
+    }
+
     if (pattern_delimiter == NULL) {
         // No delimiter in pattern
         // But check if message has a delimiter
@@ -196,8 +200,8 @@ bool process_full_message(char *data) {
     int length = strlen(data);
     command_map_t *command_found = NULL;
     uint8_t layer_found = LAYER_UNSET;
-    bool found_command_match = false;
-    bool found_layer_match = false;
+    uint8_t found_command_match = -1;
+    uint8_t found_layer_match = -1;
 
     if (length >= sizeof(received_command)) {
         return false;
@@ -220,7 +224,7 @@ bool process_full_message(char *data) {
     // Command map checks
     for (uint8_t i = 0; i < cmd_map_size; i++) {
         if (match_pattern(cmd_map[i].pattern, received_command, cmd_map[i].case_sensitive)) {
-            found_command_match = true;
+            found_command_match = i;
             command_found = &cmd_map[i];
             break;
         }
@@ -229,7 +233,7 @@ bool process_full_message(char *data) {
     // Layer map checks
     for (uint8_t i = 0; i < lyr_map_size; i++) {
         if (match_pattern(lyr_map[i].pattern, received_command, lyr_map[i].case_sensitive)) {
-            found_layer_match = true;
+            found_layer_match = i;
             layer_found = lyr_map[i].layer;
             break;
         }
@@ -239,12 +243,12 @@ bool process_full_message(char *data) {
     deactivate_layer();
 
     // Enable new command if found
-    if (found_command_match && command_found != NULL) {
+    if (found_command_match != -1 && command_found != NULL) {
         enable_command(command_found);
     }
 
     // Activate new layer if found
-    if (found_layer_match && layer_found != LAYER_UNSET) {
+    if (found_layer_match != -1 && layer_found != LAYER_UNSET) {
         activate_layer(layer_found);
     }
 
@@ -256,20 +260,18 @@ bool process_full_message(char *data) {
         }
     }
 
-    if (found_command_match) {
-        uprintf("Received command: %s\n", received_command);
-    } else if (!found_layer_match) {
-        uprintf("Unknown command: %s\n", received_command);
+    if (found_command_match != -1) {
+        uprintf("Matched message %s on command: %s\n", received_command, cmd_map[found_command_match].pattern);
+    } else {
+        uprintf("Did not match message %s on any command\n", received_command);
     }
-
     #endif
 
-    return found_command_match || found_layer_match;
+    return found_command_match != -1 || found_layer_match != -1;
 }
 
 
 void hid_notify(uint8_t *data, uint8_t length) {
-
     // Check for our identifiers to ensure no conflicts with other libraries
     if (length < 2 || data[0] != 0x81 || data[1] != 0x9F) {
         return; // Discard the message if it doesn't match
@@ -278,24 +280,6 @@ void hid_notify(uint8_t *data, uint8_t length) {
     // Strip off those 2 identifying characters
     data += 2;
     length -= 2;
-
-    #ifdef CONSOLE_ENABLE
-    printf("Received %d bytes: \n", length);
-    for (uint8_t i = 2; i < length; i++) {
-        if (data[i] == ETX_TERMINATOR[0]) {
-            printf("$");
-        } else if (data[i] == GS_DELIMITER[0]) {
-            printf(" | ");
-        } else if (data[i] == 0x81) {
-            printf("^");
-        } else if (data[i] == 0x9F) {
-            /* printf(" 0x9F "); */
-        } else {
-            uprintf("%c", data[i] % 256);
-        }
-    }
-    printf("\n");
-    #endif
 
     // Process each byte of the incoming packet.
     bool match = false;
