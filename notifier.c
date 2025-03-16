@@ -200,8 +200,8 @@ bool process_full_message(char *data) {
     int length = strlen(data);
     command_map_t *command_found = NULL;
     uint8_t layer_found = LAYER_UNSET;
-    uint8_t found_command_match = -1;
-    uint8_t found_layer_match = -1;
+    signed int found_command_match = -1;
+    signed int found_layer_match = -1;
 
     if (length >= sizeof(received_command)) {
         return false;
@@ -222,7 +222,7 @@ bool process_full_message(char *data) {
     size_t lyr_map_size = get_layer_map_size();
 
     // Command map checks
-    for (uint8_t i = 0; i < cmd_map_size; i++) {
+    for (int i = 0; i < cmd_map_size; i++) {
         if (match_pattern(cmd_map[i].pattern, received_command, cmd_map[i].case_sensitive)) {
             found_command_match = i;
             command_found = &cmd_map[i];
@@ -231,7 +231,7 @@ bool process_full_message(char *data) {
     }
 
     // Layer map checks
-    for (uint8_t i = 0; i < lyr_map_size; i++) {
+    for (int i = 0; i < lyr_map_size; i++) {
         if (match_pattern(lyr_map[i].pattern, received_command, lyr_map[i].case_sensitive)) {
             found_layer_match = i;
             layer_found = lyr_map[i].layer;
