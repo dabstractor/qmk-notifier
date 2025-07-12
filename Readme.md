@@ -46,7 +46,7 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
 Add the following line to your keymap's `rules.mk` file:
 
 ```
-include "qmk-notifier/rules.mk"
+include keyboards/handwired/dactyl_manuform/5x7_1/qmk-notifier/rules.mk
 ```
 
 ## Usage
