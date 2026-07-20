@@ -4,14 +4,14 @@
       "type": "Phase",
       "id": "P1",
       "title": "Crate Naming Reconciliation",
-      "status": "Researching",
+      "status": "Complete",
       "description": "Align all source-code and documentation references to the hyphenated crate (`qmk-notifier`) / underscored firmware (`qmk_notifier`) naming contract established in the current PRD. This is a naming-only delta on the fully-implemented v0.3.0 crate (72 tests passing) — no functional change to wire protocol, public API, cache, burst-write, or reply parsing. The only genuinely outstanding code edits are mislabeled comment references discovered by a comprehensive naming audit (architecture/naming_audit.md).",
       "milestones": [
         {
           "type": "Milestone",
           "id": "P1.M1",
           "title": "Consistent naming across source and documentation",
-          "status": "Researching",
+          "status": "Complete",
           "description": "Fix all mislabeled firmware/binary references in source comments, optionally align cosmetic lib.rs naming, and run the final documentation grep gate to confirm the naming reconciliation is complete.",
           "tasks": [
             {
@@ -77,7 +77,7 @@
               "type": "Task",
               "id": "P1.M1.T3",
               "title": "Sync changeset-level documentation",
-              "status": "Researching",
+              "status": "Complete",
               "description": "Final Mode B documentation sweep: confirm that README.md and PRD.md ecosystem references are consistent with the naming reconciliation, verify the Cargo.toml dependency list matches actual source usage, and document any PRD §2 dep-list drift that cannot be fixed (PRD.md is read-only). This task depends on all implementing subtasks so it runs last as the catch-all that prevents a coherent delta from shipping with stale docs.",
               "subtasks": [
                 {
@@ -103,7 +103,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T3.S2",
                   "title": "Verify Cargo.toml dependency list vs PRD §2 and document any drift",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [
                     "P1.M1.T3.S1"

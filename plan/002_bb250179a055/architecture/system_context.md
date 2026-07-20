@@ -86,3 +86,27 @@ No `dirs`, no `toml`, no `serde`. The PRD §2 text is stale:
 
 **Action:** Document the drift; do not edit PRD.md (read-only per constraints).
 The Cargo.toml is already correct.
+
+### Verified (P1.M1.T3.S2 — 2026-07-20)
+
+Re-verified against the live tree:
+
+- **Cargo.toml is correct** — all present dependencies are used by source,
+  no dead dependencies remain:
+  - `hidapi` → `src/error.rs:1` (`use hidapi::HidError`), `src/core.rs:2`
+    (`use hidapi::{HidApi, HidDevice}`) + the `RawHid` trait/impl.
+  - `clap` → `src/lib.rs:7` (`use clap::{Arg, ArgAction, ArgGroup, ArgMatches,
+    Command}`) + `clap::value_parser!` macro uses.
+  - `libc` → `src/main.rs:118` (`libc::signal(libc::SIGPIPE, libc::SIG_DFL)`),
+    gated by the `[target.'cfg(unix)'.dependencies]` declaration.
+  - `dirs` / `toml` / `serde` → **absent** from `Cargo.toml`, `Cargo.lock`, and
+    all source (`grep` for `use dirs`/`use toml`/`use serde` returns empty).
+- **Build & test:** `cargo build` → 0 warnings; `cargo test --lib` → 72 passed,
+  0 failed (unchanged baseline).
+- **README cross-check:** README.md "### Dependencies" (lines 29-44) lists
+  OS-level *system* libraries (`libhidapi-dev`, `libudev-dev`, …) — the shared
+  libs `hidapi-sys` links — NOT a mirror of `Cargo.toml`'s `[dependencies]`.
+  No crate-dep list in README ⇒ no drift vs Cargo.toml; the section is correct
+  for its layer.
+- **PRD.md untouched** (read-only per orchestrator constraints); the §2 dep-list
+  drift above stands as the authoritative record.
