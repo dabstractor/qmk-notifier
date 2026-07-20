@@ -1,0 +1,99 @@
+{
+  "backlog": [
+    {
+      "type": "Phase",
+      "id": "P1",
+      "title": "Crate Naming Reconciliation",
+      "status": "Ready",
+      "description": "Align all source-code and documentation references to the hyphenated crate (`qmk-notifier`) / underscored firmware (`qmk_notifier`) naming contract established in the current PRD. This is a naming-only delta on the fully-implemented v0.3.0 crate (72 tests passing) — no functional change to wire protocol, public API, cache, burst-write, or reply parsing. The only genuinely outstanding code edits are mislabeled comment references discovered by a comprehensive naming audit (architecture/naming_audit.md).",
+      "milestones": [
+        {
+          "type": "Milestone",
+          "id": "P1.M1",
+          "title": "Consistent naming across source and documentation",
+          "status": "Planned",
+          "description": "Fix all mislabeled firmware/binary references in source comments, optionally align cosmetic lib.rs naming, and run the final documentation grep gate to confirm the naming reconciliation is complete.",
+          "tasks": [
+            {
+              "type": "Task",
+              "id": "P1.M1.T1",
+              "title": "Fix mislabeled firmware-commit and binary-invocation references in source comments",
+              "status": "Planned",
+              "description": "The naming audit (architecture/naming_audit.md) found 3 comment-only references that name the wrong ecosystem artifact. Two in src/core.rs attribute firmware commit `01a51935` to `qmk-notifier` (hyphen = Rust crate) when it belongs to `qmk_notifier` (underscore = firmware repo, per PRD.md §4.4 line 210). One in src/main.rs shows `qmk_notifier` as the CLI binary name when the binary is `qmk-notifier`. All three are comment-only edits with zero runtime/compile impact.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S1",
+                  "title": "Fix two core.rs firmware-commit comment references (qmk-notifier → qmk_notifier)",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.4/h3.5", "h2.1/h3.1", "h2.14"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md rows `src/core.rs:129` and `src/core.rs:425` classify these as FIRMWARE references that currently use the CRATE name (hyphen). PRD.md §4.4 (h3.5, line ~210) writes the authoritative form: `fixed in qmk_notifier commit 01a51935` (underscore = firmware). Commit `01a51935` fixed the RAW reply size from 30→32 bytes — a firmware-side change that lives in `dabstractor/qmk_notifier`, NOT `dabstractor/qmk-notifier`.\n2. INPUT: No data dependencies — these are standalone comment edits. Read `src/core.rs` to find the exact lines (search for `qmk-notifier commit` or `01a51935`).\n3. LOGIC: In `src/core.rs`, replace the two instances of `qmk-notifier commit \\`01a51935\\`` with `qmk_notifier commit \\`01a51935\\``. These are the comment at approximately line 129 (`/// sends a 32-byte reply per report (fixed in qmk-notifier commit \\`01a51935\\`,`) and line 425 (`// valid 32-byte reply per report (qmk-notifier commit \\`01a51935\\`, which`). The word `qmk-notifier` in these specific comments refers to the firmware C module and must be `qmk_notifier` (underscore). Do NOT change any other `qmk-notifier` references in the file (e.g. those referring to this crate). Do NOT change any `use qmk_notifier::` / `mod qmk_notifier` imports — those are Cargo-derived library identifiers and are invariant.\n4. OUTPUT: The two comments now correctly attribute commit `01a51935` to the firmware repo `qmk_notifier`. `cargo build` and `cargo test` (72 tests) must still pass — these are comment-only changes.\n5. DOCS: none — inline comment edits only. No user-facing/config/API surface change."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T1.S2",
+                  "title": "Fix main.rs binary-invocation comment reference (qmk_notifier → qmk-notifier)",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.11", "h2.12", "h2.1/h3.1"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md row `src/main.rs:88` classifies this as a CRATE (binary) reference that currently uses the FIRMWARE name (underscore). The comment text reads `(e.g. \\`qmk_notifier --list | head -1\\`)` — this is a shell example invoking the CLI binary, which is named `qmk-notifier` (hyphen), not the firmware module.\n2. INPUT: No data dependencies — standalone comment edit. Read `src/main.rs` around line 88 (the `reset_sigpipe_to_default` doc comment).\n3. LOGIC: In `src/main.rs`, change the binary-invocation example in the SIGPIPE comment from `qmk_notifier --list | head -1` to `qmk-notifier --list | head -1`. This is in the doc comment for `reset_sigpipe_to_default` (approximately line 88). The binary IS `qmk-notifier` (per Cargo.toml `name = \"qmk-notifier\"` and PRD §2). Do NOT change the `use qmk_notifier::` import at line 1 — that is the Cargo-derived library identifier and is invariant.\n4. OUTPUT: The SIGPIPE comment now correctly names the binary `qmk-notifier`. `cargo build` and `cargo test` must still pass.\n5. DOCS: none — inline comment edit only."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T2",
+              "title": "Optional: Align lib.rs cosmetic naming (test argv[0] strings and doc comment)",
+              "status": "Planned",
+              "description": "The naming audit found 10 test argv[0] strings and 1 doc comment in src/lib.rs that use the library identifier `qmk_notifier` where the binary name `qmk-notifier` would be more precise for clap test diagnostics. clap derives its display `bin_name` from argv[0], so test failure output currently renders `qmk_notifier` instead of the real binary `qmk-notifier`. These changes are purely cosmetic — they affect no parsing logic, no pass/fail outcomes, and no production behavior. Per delta_prd.md, these are 'Optional cosmetic polish (not required for correctness).'",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T2.S1",
+                  "title": "Update 10 lib.rs test argv[0] strings from qmk_notifier to qmk-notifier + align doc comment",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": [],
+                  "prd_selectors": ["h2.11", "h2.3"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md identifies 10 ARGV0-class references in src/lib.rs test code (lines ~876, 887, 899, 912, 915, 924, 925, 926, 927, 944) and 1 ambiguous doc comment (line ~154). All use `\"qmk_notifier\"` as the argv[0] first element passed to clap's `try_get_matches_from`. clap uses argv[0] only for the display `bin_name` in help/usage/error text — it does not affect argument parsing. The actual binary is `qmk-notifier` (Cargo.toml `name = \"qmk-notifier\"`).\n2. INPUT: No data dependencies. Read `src/lib.rs` and find all occurrences of `\"qmk_notifier\"` used as the first element in test arrays passed to `cli_for()` or `try_get_matches_from()`.\n3. LOGIC: Replace the argv[0] string `\"qmk_notifier\"` with `\"qmk-notifier\"` in all 10 test sites. These appear as the first element of arrays like `&[\"qmk_notifier\", \"--query-info\"]` → `&[\"qmk-notifier\", \"--query-info\"]`. Also optionally update the doc comment at line ~154 (`/// Build the clap \\`Command\\` for qmk_notifier`) to use `qmk-notifier` if the intent is 'the binary'. Do NOT change any `use qmk_notifier::` or `mod qmk_notifier` references — those are Cargo-derived library identifiers (invariant). Do NOT change `core::` or `error::` module references. After editing, run `cargo test` — all 72 tests MUST still pass (these changes affect only argv[0] display strings, not parsing logic).\n4. OUTPUT: Test failure/error output now renders the real binary name `qmk-notifier`. All 72 tests still pass. `cargo build` clean.\n5. DOCS: none — test-internal cosmetic edits, no user-facing/config/API surface change."
+                }
+              ]
+            },
+            {
+              "type": "Task",
+              "id": "P1.M1.T3",
+              "title": "Sync changeset-level documentation",
+              "status": "Planned",
+              "description": "Final Mode B documentation sweep: confirm that README.md and PRD.md ecosystem references are consistent with the naming reconciliation, verify the Cargo.toml dependency list matches actual source usage, and document any PRD §2 dep-list drift that cannot be fixed (PRD.md is read-only). This task depends on all implementing subtasks so it runs last as the catch-all that prevents a coherent delta from shipping with stale docs.",
+              "subtasks": [
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S1",
+                  "title": "Final grep gate: confirm no stale naming references in README.md and PRD.md",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": ["P1.M1.T1.S1", "P1.M1.T1.S2", "P1.M1.T2.S1"],
+                  "prd_selectors": ["h2.1/h3.1", "h2.2", "h2.13", "h2.14"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md already classified all references in README.md and PRD.md as CORRECT (~46 references). This subtask is the final verification gate after source edits (T1, T2) are applied. The naming contract: `qmk-notifier` (hyphen) = Rust crate/package/repo/binary; `qmk_notifier` (underscore) = firmware C module/repo; `use qmk_notifier::` = Rust library identifier (Cargo-derived, invariant).\n2. INPUT: Depends on P1.M1.T1.S1, P1.M1.T1.S2, P1.M1.T2.S1 (all source naming fixes applied).\n3. LOGIC: Run `grep -rn 'qmk.notifier\\|qmk_notifier\\|qmk-notifier' README.md PRD.md Cargo.toml` and verify every reference matches its classification: crate/package/repo/binary references are `qmk-notifier` (hyphen); firmware references are `qmk_notifier` (underscore); library-id references (`use qmk_notifier::`) stay underscore. Confirm no stale `dabstractor/qmk_notifier` repo URLs appear where `dabstractor/qmk-notifier` is intended (and vice versa). If any stale reference is found, fix it. Verify `README.md` contains the library-identifier clarification (PRD §1.2: 'the import is `use qmk_notifier::` because Cargo derives `_` from `-`'). Confirm the `qmkonnect/Cargo.toml` consumer-pin example in PRD §13 shows `{ package = \"qmk-notifier\", git = \".../qmk-notifier\", tag = \"v0.3.0\" }`.\n4. OUTPUT: Grep gate passes — zero stale naming references in README.md or PRD.md. All references match the naming contract.\n5. DOCS: This IS the Mode B documentation sync subtask. If any README.md/PRD.md reference needed fixing, it was fixed here."
+                },
+                {
+                  "type": "Subtask",
+                  "id": "P1.M1.T3.S2",
+                  "title": "Verify Cargo.toml dependency list vs PRD §2 and document any drift",
+                  "status": "Planned",
+                  "story_points": 0.5,
+                  "dependencies": ["P1.M1.T3.S1"],
+                  "prd_selectors": ["h2.2", "h2.12"],
+                  "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/cargo_naming_convention.md and system_context.md document that PRD §2 lists `dirs = \"5.0.1\"` and says `toml`/`serde` are 'currently listed but unused.' The actual Cargo.toml has: `hidapi = \"2.4.1\"`, `clap = \"4.5.31\"`, `libc = \"0.2\"` (unix target). No `dirs`, no `toml`, no `serde`. The PRD §2 text is stale — `dirs` was removed when config-file support was dropped, `toml`/`serde` were removed entirely, and `libc` was added for the SIGPIPE fix. PRD.md is READ-ONLY per orchestrator constraints and MUST NOT be edited.\n2. INPUT: Depends on P1.M1.T3.S1 (docs grep gate complete). Read current Cargo.toml and PRD.md §2.\n3. LOGIC: (a) Verify Cargo.toml dependencies are correct for the actual source usage: `hidapi` (core.rs HID I/O), `clap` (lib.rs CLI), `libc` (main.rs SIGPIPE, unix-only). Confirm NO unused dependencies remain (no `dirs`, `toml`, `serde`). (b) Run `cargo build` and `cargo test` to confirm the dependency set compiles and all 72 tests pass. (c) Document the PRD §2 dep-list drift in the architecture findings (already done in system_context.md §'PRD §2 Dependency-List Drift'). Do NOT edit PRD.md — it is read-only. If README.md has a dependencies section, verify it matches Cargo.toml.\n4. OUTPUT: Cargo.toml confirmed correct (no dead deps, all deps used). PRD §2 drift documented in architecture/system_context.md. `cargo build` clean, `cargo test` 72 passed.\n5. DOCS: Verify README.md dependency info (if any) matches Cargo.toml. Architecture docs already document the PRD §2 drift. No PRD.md edits (read-only)."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
