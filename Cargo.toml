@@ -4,8 +4,8 @@ version = "0.3.0"
 edition = "2021"
 description = "Raw-HID transport layer for the QMKonnect ecosystem; sends legacy strings and typed commands to QMK keyboards"
 license = "MIT"
-repository = "https://github.com/dabstractor/qmk_notifier"
-homepage = "https://github.com/dabstractor/qmk_notifier"
+repository = "https://github.com/dabstractor/qmk-notifier"
+homepage = "https://github.com/dabstractor/qmk-notifier"
 authors = ["Dustin Schultz <dustindschultz@gmail.com>"]
 readme = "README.md"
 

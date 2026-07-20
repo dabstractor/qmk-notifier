@@ -4,12 +4,12 @@ A high-performance Rust application that sends string commands to QMK keyboards 
 
 ## Overview
 
-I built `qmk_notifier` to communicate with QMK-powered keyboards from your desktop. It efficiently handles serializing messages and sending them in batches to overcome the 32-byte HID report size limitation, enabling seamless communication with your keyboard for dynamic layer and command management.
+I built `qmk-notifier` to communicate with QMK-powered keyboards from your desktop. It efficiently handles serializing messages and sending them in batches to overcome the 32-byte HID report size limitation, enabling seamless communication with your keyboard for dynamic layer and command management.
 
 This crate is the **transport layer** of a three-part ecosystem (see `PRD.md` for the full contract):
-- **qmk_notifier** (this crate): Rust library + CLI that owns Raw-HID wire framing, the device cache, burst-write, and the v0.3.0 typed-command transport (`QueryInfo`, `QueryCallback`, `SetOs`, `ApplyHostContext`) alongside the legacy window-string path, plus reply parsing. Transport only — it does no matching.
+- **qmk-notifier** (this crate): Rust library + CLI that owns Raw-HID wire framing, the device cache, burst-write, and the v0.3.0 typed-command transport (`QueryInfo`, `QueryCallback`, `SetOs`, `ApplyHostContext`) alongside the legacy window-string path, plus reply parsing. Transport only — it does no matching.
 - **[qmkonnect](https://github.com/dabstractor/qmkonnect)**: Cross-platform desktop daemon that detects the foreground window, runs the host-side matcher (`rules.toml`), and sends via this crate.
-- **[qmk-notifier](https://github.com/dabstractor/qmk-notifier)**: QMK firmware module that receives, pattern-matches, and toggles layers/features. It owns the canonical wire protocol.
+- **[qmk_notifier](https://github.com/dabstractor/qmk_notifier)**: QMK firmware module that receives, pattern-matches, and toggles layers/features. It owns the canonical wire protocol.
 
 ## Installation
 
@@ -17,13 +17,13 @@ This crate is the **transport layer** of a three-part ecosystem (see `PRD.md` fo
 
 ```bash
 # Clone the repository
-git clone https://github.com/dabstractor/qmk_notifier.git
-cd qmk_notifier
+git clone https://github.com/dabstractor/qmk-notifier.git
+cd qmk-notifier
 
 # Build the project
 cargo build --release
 
-# The binary will be available at target/release/qmk_notifier
+# The binary will be available at target/release/qmk-notifier
 ```
 
 ### Dependencies
@@ -50,22 +50,22 @@ VID/PID are optional (omit them for auto-discovery by usage page/usage — the z
 
 ```bash
 # Send a message — auto-discover any QMK keyboard (usage page 0xFF60 / usage 0x61)
-qmk_notifier "your_message_here"
+qmk-notifier "your_message_here"
 
 # Disambiguate among multiple QMK keyboards with explicit VID/PID
-qmk_notifier --vendor-id 0xFEED --product-id 0x0000 "your_message_here"
+qmk-notifier --vendor-id 0xFEED --product-id 0x0000 "your_message_here"
 
 # List all connected HID devices
-qmk_notifier --list
+qmk-notifier --list
 
 # Query a typed-capable board's capability info (proto_ver, feature_flags, callback_count)
-qmk_notifier --query-info
+qmk-notifier --query-info
 
 # Enumerate the firmware callback registry (QueryInfo then a QueryCallback sweep)
-qmk_notifier --list-callbacks
+qmk-notifier --list-callbacks
 
 # Enable verbose output
-qmk_notifier -v "your_message_here"
+qmk-notifier -v "your_message_here"
 ```
 
 ## Command Line Options
@@ -101,7 +101,7 @@ multiple QMK keyboards — they are NOT the matching default.
 
 ## Programmatic Usage
 
-This package can also be used as a library in other Rust projects:
+This package can also be used as a library in other Rust projects. Note the library identifier is `qmk_notifier` (Cargo derives `_` from the package's `-`), so the import is `use qmk_notifier::`:
 
 ```rust
 use qmk_notifier::{RunParameters, RunCommand, HostOs, run};
@@ -170,11 +170,11 @@ bounded read — a non-capable/offline device). See `PRD.md` §7 and §10.
 
 ## Integration with QMK Keyboards
 
-This tool is designed to work with my [qmk-notifier](https://github.com/dabstractor/qmk-notifier) QMK module. For setup instructions, refer to the qmk-notifier README.
+This tool is designed to work with my [qmk_notifier](https://github.com/dabstractor/qmk_notifier) QMK module. For setup instructions, refer to the qmk_notifier README.
 
 To use this with QMK, your keyboard firmware must:
 1. Have Raw HID enabled ([QMK Raw HID Documentation](https://docs.qmk.fm/#/feature_rawhid))
-2. Include the qmk-notifier module
+2. Include the qmk_notifier module
 
 ## Example Use Cases
 
@@ -193,7 +193,7 @@ I chose Rust for this project to ensure:
 
 ## Related Projects
 
-- **[qmk-notifier](https://github.com/dabstractor/qmk-notifier)**: My QMK module that receives and processes the commands from this tool
+- **[qmk_notifier](https://github.com/dabstractor/qmk_notifier)**: My QMK module that receives and processes the commands from this tool
 - **[hyprland-qmk-window-notifier](https://github.com/dabstractor/hyprland-qmk-window-notifier)**: My Wayland companion tool for automatic application detection
 - **[zigotica/active-app-qmk-layer-updater](https://github.com/zigotica/active-app-qmk-layer-updater)**: Similar tool for Windows, macOS, and X11 environments
 

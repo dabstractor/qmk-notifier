@@ -1,24 +1,24 @@
-# SPECIFICATION — qmk_notifier (Rust Raw-HID transport crate)
+# SPECIFICATION — qmk-notifier (Rust Raw-HID transport crate)
 
 **Master Product Requirements & Engineering Specification**
 Target: a single document complete enough for a developer agent to reimplement
 this crate from scratch. Read top to bottom before writing code.
 
 > **Product scope.** This is the complete product & engineering specification
-> for the `qmk_notifier` Rust crate (library + CLI). The crate is the
+> for the `qmk-notifier` Rust crate (library + CLI). The crate is the
 > **transport layer** of the QMKonnect ecosystem: it owns Raw-HID wire framing,
 > device discovery/caching, burst-write with retry, typed-command framing, and
 > device-reply parsing. It sends the legacy `class\x1Dtitle` string **and** the
-> typed commands defined canonically in the firmware spec (`qmk-notifier/PRD.md`
+> typed commands defined canonically in the firmware spec (`qmk_notifier/PRD.md`
 > §4.6), and returns each parsed reply to the caller. **The host-side pattern
 > matcher lives in `qmkonnect`, not here** — this crate is transport-only.
 
-> **Scope of "this crate".** This document specifies **`qmk_notifier`**
-> (underscore) — the Rust **library + CLI** that owns Raw-HID wire framing,
+> **Scope of "this crate".** This document specifies **`qmk-notifier`**
+> (hyphen) — the Rust **library + CLI** that owns Raw-HID wire framing,
 > device discovery/caching, burst-write, and typed-command
 > transport + response parsing. It is *not* the desktop app (`qmkonnect`,
-> `dabstractor/qmkonnect`) and *not* the firmware (`qmk-notifier`, hyphen,
-> `dabstractor/qmk-notifier`). Those are the other nodes of the ecosystem.
+> `dabstractor/qmkonnect`) and *not* the firmware (`qmk_notifier`, underscore,
+> `dabstractor/qmk_notifier`). Those are the other nodes of the ecosystem.
 
 ---
 
@@ -43,9 +43,9 @@ this crate from scratch. Read top to bottom before writing code.
 
 ## 1. Product Overview
 
-### 1.1 What qmk_notifier is
+### 1.1 What qmk-notifier is
 
-`qmk_notifier` is a small, dependency-light Rust crate (also built as a CLI) that
+`qmk-notifier` is a small, dependency-light Rust crate (also built as a CLI) that
 moves bytes between a desktop process and a QMK keyboard over the **Raw HID**
 interface (usage page `0xFF60` / usage `0x61`). It owns **transport only**:
 
@@ -65,24 +65,25 @@ ported into **`qmkonnect`**, not here.
 
 | Project | Repo | Language | Role |
 |---|---|---|---|
-| **qmk_notifier** ← *this repo* | `dabstractor/qmk_notifier` | Rust | **Transport crate** (+ CLI). Wire framing, device cache, burst-write, typed-command transport + reply parsing. Linked by `qmkonnect`. |
+| **qmk-notifier** ← *this repo* | `dabstractor/qmk-notifier` | Rust | **Transport crate** (+ CLI). Wire framing, device cache, burst-write, typed-command transport + reply parsing. Linked by `qmkonnect`. |
 | **QMKonnect** | `dabstractor/qmkonnect` | Rust | Cross-platform **desktop daemon**. Detects the foreground window, runs the host-side matcher (`rules.toml`), and orchestrates the handshake + per-window sends via this crate. |
-| **qmk-notifier** | `dabstractor/qmk-notifier` | C | On-keyboard **receiver + matcher + actor** (firmware). Owns the canonical wire contract. |
-| **qmk_firmware** | `qmk/qmk_firmware` | C | Upstream QMK; qmk-notifier plugs into it via `RAW_ENABLE`. |
+| **qmk_notifier** | `dabstractor/qmk_notifier` | C | On-keyboard **receiver + matcher + actor** (firmware). Owns the canonical wire contract. |
+| **qmk_firmware** | `qmk/qmk_firmware` | C | Upstream QMK; qmk_notifier plugs into it via `RAW_ENABLE`. |
 
-> **Naming hazard (read once):** `qmk_notifier` (underscore) = this Rust crate.
-> `qmk-notifier` (hyphen) = the firmware C module. They talk over the fixed wire
+> **Naming hazard (read once):** `qmk-notifier` (hyphen) = this Rust crate
+> (package + repo). `qmk_notifier` (underscore) = the firmware C module. They talk over the fixed wire
 > protocol in §4; the firmware's `PRD.md` §4 is the **canonical** byte-level
 > contract — this document mirrors the transport side and defers to it on
-> disagreement.
+> disagreement. (The crate's Rust *library* identifier is also `qmk_notifier` —
+> Cargo auto-derives `_` from the package's `-` — so source reads `use qmk_notifier::`.)
 
 ---
 
 ## 2. Repository Layout & Deliverables
 
 ```
-qmk_notifier/
-├── Cargo.toml          # package qmk_notifier, edition 2021; lib + bin
+qmk-notifier/
+├── Cargo.toml          # package qmk-notifier, edition 2021; lib + bin
 ├── Cargo.lock
 ├── README.md           # user-facing README (kept in sync with this SPEC)
 ├── PRD.md              # this document
@@ -93,9 +94,9 @@ qmk_notifier/
     └── main.rs         # CLI entry (parse_cli_args -> run)
 ```
 
-**One library crate, one binary** (`Cargo.toml` has `[lib]` + `[[bin]]`). The
-binary `qmk_notifier` is a thin wrapper around `parse_cli_args` + `run`
-(`main.rs`).
+**One library crate, one binary** (both default-named from the `qmk-notifier`
+package: the library identifier `qmk_notifier`, and the binary `qmk-notifier`).
+The binary is a thin wrapper around `parse_cli_args` + `run` (`main.rs`).
 
 **Dependencies** (`Cargo.toml`): `hidapi = "2.4.1"` (HID I/O), `clap = "4.5"`
 (CLI), `dirs = "5.0.1"` (home/config dirs). (`toml`/`serde` are currently listed
@@ -162,7 +163,7 @@ typed-command variants and `CommandResponse` transport behavior are in §10.
 
 ## 4. Wire Protocol — Transport Side
 
-> **Canonical owner: the firmware spec** (`dabstractor/qmk-notifier`, `PRD.md`
+> **Canonical owner: the firmware spec** (`dabstractor/qmk_notifier`, `PRD.md`
 > §4). This section describes the transport side as this crate implements it; if
 > the two ever disagree, **the firmware PRD wins** and this crate is wrong.
 
@@ -206,7 +207,7 @@ The firmware sends a 32-byte reply per report via `raw_hid_send(response,
 RAW_REPORT_SIZE)` (`RAW_REPORT_SIZE = 32`). This is **received** by the host — the
 reply is a full 32-byte logical report satisfying the `length == 32` guard on every
 QMK USB protocol. (An earlier firmware build reused the header-stripped `length`
-of `30` and the reply was rejected; fixed in qmk-notifier commit `01a51935`. The
+of `30` and the reply was rejected; fixed in qmk_notifier commit `01a51935`. The
 stale "ack silently dropped because `length == RAW_EPSIZE`" wording that appeared
 in older revisions of this crate's comments and the sibling specs has been
 corrected.) This crate reads + parses the reply (§8).
@@ -340,7 +341,7 @@ handle does not stall on accumulated replies. `run()` returns the parsed
 
 The typed commands carry the host-side-rules protocol (host-side design canonical
 in `qmkonnect/spec/HOST_RULES.md`; wire contract in the firmware
-`qmk-notifier/PRD.md` §4.6). The `RunCommand` variants, `HostOs`, and
+`qmk_notifier/PRD.md` §4.6). The `RunCommand` variants, `HostOs`, and
 `CommandResponse` are defined in §3; this section covers transport behavior.
 
 ### 10.1 Framing
@@ -436,12 +437,12 @@ uses the library directly.)*
   Releases are git tags `v<x.y.z>`.
 - `qmkonnect/Cargo.toml` pins:
   ```toml
-  qmk_notifier = { package = "qmk_notifier",
-                   git = "https://github.com/dabstractor/qmk_notifier",
+  qmk_notifier = { package = "qmk-notifier",
+                   git = "https://github.com/dabstractor/qmk-notifier",
                    tag = "v0.3.0" }   # the release implementing this spec
   ```
 - **Cross-repo source of truth:**
-  - Canonical wire contract → `dabstractor/qmk-notifier` `PRD.md` §4 (firmware).
+  - Canonical wire contract → `dabstractor/qmk_notifier` `PRD.md` §4 (firmware).
   - Host-side orchestration / `rules.toml` → `dabstractor/qmkonnect`
     `spec/HOST_RULES.md`.
   - Transport (this crate) → this `PRD.md`.
@@ -472,6 +473,6 @@ uses the library directly.)*
 ---
 
 *End of specification. This crate is the transport third of a three-part system;
-see `dabstractor/qmk-notifier/PRD.md` (firmware, canonical wire contract) and
+see `dabstractor/qmk_notifier/PRD.md` (firmware, canonical wire contract) and
 `dabstractor/qmkonnect/spec/PRD.md` + `spec/HOST_RULES.md` (desktop) for the
 other two thirds.*
