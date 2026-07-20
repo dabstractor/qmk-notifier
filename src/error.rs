@@ -45,7 +45,12 @@ impl fmt::Display for QmkError {
                     "No device found with VID: {vid}, PID: {pid}, Usage Page: 0x{usage_page:04X}, Usage: 0x{usage:04X}"
                 )
             }
-            QmkError::DeviceOpenError(e) => write!(f, "Error opening device: {}", e),
+            // NOTE: the message text is constructed in `open_matching_devices`
+            // to intentionally include the literal substrings `"failed to open"`
+            // and `"permission denied"` that qmkonnect matches on (PRD §9).
+            // Do not strip or rephrase them here — qmkonnect lowercases the
+            // whole `Display` string before substring matching.
+            QmkError::DeviceOpenError(e) => write!(f, "{}", e),
             QmkError::InvalidHexValue(e) => write!(f, "Invalid hex value: {}", e),
             QmkError::InvalidDecimalValue(e) => write!(f, "Invalid decimal value: {}", e),
             QmkError::SendReportError(e) => write!(f, "Error sending report: {}", e),

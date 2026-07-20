@@ -2,6 +2,7 @@
 name = "qmk-notifier"
 version = "0.3.0"
 edition = "2021"
+rust-version = "1.82"
 description = "Raw-HID transport layer for the QMKonnect ecosystem; sends legacy strings and typed commands to QMK keyboards"
 license = "MIT"
 repository = "https://github.com/dabstractor/qmk-notifier"

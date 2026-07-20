@@ -70,8 +70,23 @@ fn main() {
         // library-level semantic but confusing to surface to the user — so we
         // suppress it here instead of printing a bare `Timeout` line.
         Ok(_) if is_list => {}
-        // --query-info / message, OR a non-capable device (Timeout/Legacy)
-        // when --list-callbacks was asked for: just print the raw response.
+        // --list-callbacks against a non-typed-capable board: `run` returns
+        // `Timeout` (no 0x51 reply) or `Legacy { .. }` instead of `Info`, so
+        // the callback-sweep arm above never fires. Previously this fell through
+        // to the catch-all below and printed a bare `Debug` dump like
+        // `Legacy { matched: true }` with no explanation. Give the user an
+        // actionable message instead.
+        Ok(response) if list_callbacks => {
+            eprintln!(
+                "--list-callbacks requires a typed-capable board, but `--query-info` did not return a typed (0x51) reply."
+            );
+            eprintln!(
+                "The board either does not run the QMKonnect typed-command firmware or did not respond within the timeout."
+            );
+            eprintln!("Raw response: {response:?}");
+        }
+        // --query-info / message, OR a non-capable device (Timeout/Legacy):
+        // print the raw response.
         Ok(response) => println!("{:?}", response),
         Err(e) => {
             eprintln!("Error: {}", e);

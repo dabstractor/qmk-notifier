@@ -155,7 +155,12 @@ impl RunParameters {
 /// configures the parser; the actual `get_matches()`/`try_get_matches_from()`
 /// call is made by the caller (so tests can use the no-exit `try_*` form).
 fn build_cli_command() -> Command {
-    Command::new("QMK Keyboard Communication Tool")
+    // The string passed to `Command::new` is the name clap prints in the
+    // `--version` line. Using "qmk-notifier" (the binary/crate name) makes
+    // `--version` emit the conventional `qmk-notifier 0.3.0` instead of
+    // `QMK Keyboard Communication Tool 0.3.0`. The `Usage:` line is derived
+    // from argv[0] independently, so it already shows `qmk-notifier`.
+    Command::new("qmk-notifier")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
         .about("Sends raw HID reports to QMK keyboards; --query-info / --list-callbacks diagnose typed-capable boards")

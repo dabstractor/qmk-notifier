@@ -230,6 +230,43 @@ enum SendOutcome {
     TotalFailure,
 }
 
+/// Result of capturing the IN-side reply during [`burst_to_one`].
+///
+/// Distinguishes the three reply outcomes so that a genuine HID read
+/// *malfunction* is surfaced as [`QmkError::HidReadError`] instead of being
+/// silently collapsed into a benign timeout (PRD §9). Previously both
+/// `Ok(0)` (timeout / no data) and `Err(_)` (read failure) hit the same `_ =>
+/// break` arm and were reported identically as `CommandResponse::Timeout`,
+/// which made [`QmkError::HidReadError`] / [`QmkError::NoResponseReceived`]
+/// dead code and hid hardware problems behind a "non-capable device" mask.
+#[derive(Debug)]
+enum BurstReply {
+    /// A real reply was captured (the LAST/ETX-report reply for a multi-report
+    /// burst). Carries the raw IN report bytes.
+    Captured(Vec<u8>),
+    /// No reply arrived within [`REPLY_READ_TIMEOUT_MS`] (`read_timeout` returned
+    /// `Ok(0)`). The canonical "non-capable device" / not-present case; mapped
+    /// to [`crate::CommandResponse::Timeout`].
+    Timeout,
+    /// A read *failed* (`read_timeout` returned `Err`). Surfaced as
+    /// [`QmkError::HidReadError`] so a hardware/transport malfunction is not
+    /// mistaken for a benign timeout.
+    ReadError(String),
+}
+
+impl BurstReply {
+    /// `Some(bytes)` when a reply was [`Captured`](BurstReply::Captured), else
+    /// `None`. Mirrors the old `(bool, Option<Vec<u8>>)` shape so existing
+    /// callers/tests can extract the captured reply without matching all arms.
+    #[cfg(test)]
+    fn captured(self) -> Option<Vec<u8>> {
+        match self {
+            BurstReply::Captured(bytes) => Some(bytes),
+            _ => None,
+        }
+    }
+}
+
 /// One full attempt: ensure the cache is populated for `key`, then burst-write
 /// `data` to every cached device. Invalidates the cache on any write error so
 /// the next attempt/call re-enumerates + reopens.
@@ -268,12 +305,7 @@ fn try_send_once(
             }
 
             let (success, reply) = burst_to_one(interface, data, batch_count, verbose);
-            if success {
-                succeeded += 1;
-                if first_reply.is_none() {
-                    first_reply = reply; // first successful device wins (transport_evolution.md §KDD #4)
-                }
-            } else {
+            if !success {
                 failed += 1;
                 if verbose {
                     println!(
@@ -281,6 +313,37 @@ fn try_send_once(
                         device_idx + 1,
                         device_count
                     );
+                }
+                continue;
+            }
+            succeeded += 1;
+            match reply {
+                BurstReply::Captured(bytes) => {
+                    // first successful device wins (transport_evolution.md §KDD #4)
+                    if first_reply.is_none() {
+                        first_reply = Some(bytes);
+                    }
+                }
+                BurstReply::Timeout => {
+                    // Normal "non-capable device" / not-present case: no reply,
+                    // mapped by `run` to `CommandResponse::Timeout`. Leave
+                    // first_reply as-is (None unless a prior device replied).
+                }
+                BurstReply::ReadError(msg) => {
+                    // A genuine HID read *failure* (not a timeout). Surface it so
+                    // a hardware/transport malfunction is not masked as a benign
+                    // timeout (PRD §9; previously dead code). Invalidate the
+                    // cache (the handle is suspect) and propagate.
+                    *cache = None;
+                    if verbose {
+                        println!(
+                            "Read failure on device {}/{}: {}. Invalidating cache.",
+                            device_idx + 1,
+                            device_count,
+                            msg
+                        );
+                    }
+                    return Err(QmkError::HidReadError(msg));
                 }
             }
         }
@@ -311,12 +374,15 @@ fn try_send_once(
 /// carries the real result), then drain any
 /// surplus IN-side reports.
 ///
-/// Returns `(false, None)` on the first write error; otherwise `(true, reply)`,
-/// where `reply` is `Some(bytes)` when a reply arrived within
-/// `REPLY_READ_TIMEOUT_MS`, or `None` on timeout / read failure. The bool is the
-/// write-success flag (same semantics as the pre-v0.3.0 `-> bool` form); the
-/// `Option<Vec<u8>>` is the LAST captured IN report (the ETX-report reply),
-/// `parse_reply` into a `CommandResponse` (PRD §8, §10.2).
+/// Returns `(false, BurstReply::Timeout)` on the first write error; otherwise
+/// `(true, reply)`, where `reply` is [`BurstReply::Captured(bytes)`] when a
+/// reply arrived within `REPLY_READ_TIMEOUT_MS`, [`BurstReply::Timeout`] on a
+/// timeout (`Ok(0)`, the normal "non-capable device" case), or
+/// [`BurstReply::ReadError`] when the read itself failed (`Err`, surfaced as
+/// `QmkError::HidReadError`). The bool is the write-success flag (same
+/// semantics as the pre-v0.3.0 `-> bool` form); the [`BurstReply`] is the LAST
+/// captured IN report (the ETX-report reply) for `parse_reply` into a
+/// `CommandResponse` (PRD §8, §10.2, §9).
 ///
 /// Reply capture (v0.3.1): after the burst-write succeeds, up to `batch_count`
 /// IN reports are read with a bounded `read_timeout(REPLY_READ_TIMEOUT_MS)` each,
@@ -327,8 +393,8 @@ fn try_send_once(
 /// one. Surplus IN reports (beyond `batch_count`) are then drained non-blocking
 /// (bounded by `IN_DRAIN_MAX`) as a safety net so a persistent handle does not
 /// stall on accumulated replies. `read_timeout` returns `Ok(0)` on timeout/no-data
-/// (NOT an error) and `Ok(n > 0)` on a real read; a timeout/error breaks the
-/// capture loop early (`external_deps.md` §read_timeout semantics).
+/// (NOT an error) and `Ok(n > 0)` on a real read; `Err` is a genuine read failure
+/// now surfaced (not collapsed into a timeout).
 ///
 /// Pre-send drain (v0.3.1, Issue 3): BEFORE the burst-write, up to
 /// `IN_DRAIN_MAX` IN reports are read non-blocking (`read_timeout(0)`) and
@@ -357,7 +423,7 @@ fn burst_to_one<T: RawHid>(
     data: &[u8],
     batch_count: usize,
     verbose: bool,
-) -> (bool, Option<Vec<u8>>) {
+) -> (bool, BurstReply) {
     let mut request_data = [0u8; REPORT_LENGTH + 1]; // stack array (was vec!)
     request_data[1] = 0x81;
     request_data[2] = 0x9F;
@@ -393,7 +459,7 @@ fn burst_to_one<T: RawHid>(
             if verbose {
                 println!("Error on batch {}: {}", batch + 1, e);
             }
-            return (false, None);
+            return (false, BurstReply::Timeout);
         }
     }
 
@@ -405,19 +471,37 @@ fn burst_to_one<T: RawHid>(
     // keeping the last non-empty one. Unlike the drain below (non-blocking,
     // discards surplus), each read here WAITS up to REPLY_READ_TIMEOUT_MS for a
     // real reply. read_timeout returns Ok(0) on timeout/no-data (NOT an error)
-    // and Ok(n>0) when data was read; a timeout/error breaks the loop early.
-    // (PRD §4.4, §8; external_deps.md §read_timeout semantics.)
-    let mut reply: Option<Vec<u8>> = None;
+    // and Ok(n>0) when data was read.
+    //
+    // Read-error vs. timeout distinction (PRD §9): a *timeout* (`Ok(0)`) is the
+    // normal "non-capable device" case and becomes `BurstReply::Timeout` →
+    // `CommandResponse::Timeout`. A genuine read *failure* (`Err`) is now
+    // surfaced as `BurstReply::ReadError` → `QmkError::HidReadError` instead of
+    // being silently swallowed, so a hardware/transport malfunction is not
+    // masked as a benign timeout. (PRD §4.4, §8, §9; external_deps.md
+    // §read_timeout semantics.)
+    let mut reply: BurstReply = BurstReply::Timeout; // assumed until proven otherwise
     let mut read_buf = [0u8; REPORT_LENGTH + 1];
     for _ in 0..batch_count.max(1) {
         match interface.read_timeout(&mut read_buf, REPLY_READ_TIMEOUT_MS) {
             Ok(n) if n > 0 => {
-                reply = Some(read_buf[..n].to_vec()); // overwrite ⇒ keep LAST (ETX) reply
+                // overwrite ⇒ keep LAST (ETX) reply; a prior ReadError/Timeout is
+                // superseded by a real reply that finally arrived.
+                reply = BurstReply::Captured(read_buf[..n].to_vec());
                 if verbose {
                     println!("Captured device reply: {} bytes", n);
                 }
             }
-            _ => break, // Ok(0) = timeout, Err = read failure ⇒ stop (no more replies)
+            Ok(_) => break, // Ok(0) = timeout/no-data ⇒ stop (no more replies)
+            Err(e) => {
+                // Read *failure* (not a timeout): surface it. A prior captured
+                // reply (if any) still wins as the result; otherwise record the
+                // error so the caller can raise QmkError::HidReadError.
+                if !matches!(reply, BurstReply::Captured(_)) {
+                    reply = BurstReply::ReadError(e.to_string());
+                }
+                break;
+            }
         }
     }
 
@@ -746,16 +830,40 @@ fn open_matching_devices(api: &HidApi, key: &MatchKey) -> Result<Vec<HidDevice>,
         });
     }
 
-    let opened_devices: Vec<HidDevice> = device_infos
-        .into_iter()
-        .filter_map(|info| info.open_device(api).ok())
-        .collect();
+    // Try to open each matching interface, retaining the first underlying
+    // hidapi error (if any) so it can be surfaced instead of a generic string.
+    // The previous implementation used `.filter_map(|info| info.open_device(api).ok())`,
+    // which discarded the real open error (typically `"Permission denied"` on
+    // Linux) and replaced it with a hard-coded message that contained none of
+    // qmkonnect's retry keywords (PRD §9), breaking the documented recovery
+    // path for the canonical first-run permissions failure.
+    let mut opened_devices = Vec::new();
+    let mut first_open_error: Option<String> = None;
+    for info in device_infos {
+        match info.open_device(api) {
+            Ok(device) => opened_devices.push(device),
+            Err(e) => {
+                if first_open_error.is_none() {
+                    first_open_error = Some(e.to_string());
+                }
+            }
+        }
+    }
 
     if opened_devices.is_empty() {
-        return Err(QmkError::DeviceOpenError(
-            "Found matching HID devices, but could not open any of them for communication. Check permissions (udev rules on Linux)."
-                .to_string(),
-        ));
+        // Surface the wrapped hidapi error when available, and include the
+        // literal substrings `"failed to open"` and `"permission denied"`
+        // that qmkonnect matches on (case-insensitively) to classify a failure
+        // as retryable (PRD §9 / qmkonnect src/core/notifier.rs). This keeps
+        // the canonical first-run permissions failure (no udev rule / user not
+        // in the `input` group) on the retry-and-swallow path instead of
+        // propagating as a hard error.
+        let detail = first_open_error
+            .map(|e| format!(" underlying error: {e}"))
+            .unwrap_or_default();
+        return Err(QmkError::DeviceOpenError(format!(
+            "Failed to open any matching HID device (permission denied? check udev rules on Linux).{detail}"
+        )));
     }
 
     Ok(opened_devices)
@@ -1520,7 +1628,10 @@ mod tests {
             batch_count,
             "burst_to_one must write exactly batch_count reports"
         );
-        assert!(reply.is_some(), "the one queued reply must be captured");
+        assert!(
+            reply.captured().is_some(),
+            "the one queued reply must be captured"
+        );
     }
 
     #[test]
@@ -1556,7 +1667,9 @@ mod tests {
             success,
             "write path must succeed (FakeHid::write returns Ok)"
         );
-        let reply = reply.expect("must capture the ETX-report reply, not time out");
+        let reply = reply
+            .captured()
+            .expect("must capture the ETX-report reply, not time out");
         assert_eq!(
             reply[0], 1,
             "must capture the ETX-report reply (1), not the intermediate [0] reply"
@@ -1588,7 +1701,7 @@ mod tests {
 
         let (success, reply) = burst_to_one(&fake, &payload, batch_count, false);
         assert!(success, "write path must succeed");
-        let reply = reply.expect("must capture the single reply");
+        let reply = reply.captured().expect("must capture the single reply");
         assert_eq!(
             reply[0], 1,
             "must capture the single (ETX) reply's match-bool"
@@ -1628,7 +1741,9 @@ mod tests {
             success,
             "write path must succeed (FakeHid::write returns Ok)"
         );
-        let reply = reply.expect("must capture the fresh reply, not time out");
+        let reply = reply
+            .captured()
+            .expect("must capture the fresh reply, not time out");
 
         // (a) Contract assertion (item clause 3): the captured reply is the FRESH
         //     one, whose [0]==1 — NOT the stale [0].
@@ -1679,7 +1794,9 @@ mod tests {
 
         let (success, reply) = burst_to_one(&fake, &payload, batch_count, false);
         assert!(success, "write path must succeed");
-        let reply = reply.expect("must capture the single fresh reply");
+        let reply = reply
+            .captured()
+            .expect("must capture the single fresh reply");
         assert_eq!(
             reply[0], 1,
             "the fresh reply must be captured intact (drain must not steal it)"
