@@ -126,7 +126,7 @@ pub fn list_hid_devices() -> Result<(), QmkError> {
 const PAYLOAD_PER_REPORT: usize = REPORT_LENGTH - 2;
 
 /// Ceiling on how many IN-side reports we drain after a burst. The firmware
-/// sends a 32-byte reply per report (fixed in qmk-notifier commit `01a51935`,
+/// sends a 32-byte reply per report (fixed in qmk_notifier commit `01a51935`,
 /// which corrected the response size from the header-stripped `30` to the full
 /// `RAW_REPORT_SIZE = 32`). v0.2.x of this crate only *drains/discards* those
 /// replies; the v0.3.0 typed-command path reads and parses them. Draining is
@@ -422,7 +422,7 @@ fn burst_to_one<T: RawHid>(
     }
 
     // Drain any pending IN-side reports (non-blocking). The firmware sends a
-    // valid 32-byte reply per report (qmk-notifier commit `01a51935`, which
+    // valid 32-byte reply per report (qmk_notifier commit `01a51935`, which
     // fixed the response size from the header-stripped `30` to `RAW_REPORT_SIZE`
     // = 32); the old "ack silently dropped by send_raw_hid because length ==
     // RAW_EPSIZE" note described the pre-fix firmware. v0.2.x of this crate
