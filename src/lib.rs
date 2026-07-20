@@ -151,7 +151,7 @@ impl RunParameters {
     }
 }
 
-/// Build the clap `Command` for `qmk_notifier` (PRD §11 *CLI*). Pure: it only
+/// Build the clap `Command` for `qmk-notifier` (PRD §11 *CLI*). Pure: it only
 /// configures the parser; the actual `get_matches()`/`try_get_matches_from()`
 /// call is made by the caller (so tests can use the no-exit `try_*` form).
 fn build_cli_command() -> Command {
@@ -873,7 +873,7 @@ mod tests {
 
     #[test]
     fn test_parse_query_info_flag() {
-        let params = cli_for(&["qmk_notifier", "--query-info"]);
+        let params = cli_for(&["qmk-notifier", "--query-info"]);
         assert!(matches!(params.command, RunCommand::QueryInfo));
         // Defaults preserved.
         assert_eq!(params.usage_page, DEFAULT_USAGE_PAGE);
@@ -884,7 +884,7 @@ mod tests {
 
     #[test]
     fn test_parse_list_callbacks_flag() {
-        let params = cli_for(&["qmk_notifier", "--list-callbacks"]);
+        let params = cli_for(&["qmk-notifier", "--list-callbacks"]);
         // --list-callbacks maps to QueryInfo (the library sees no difference from
         // --query-info). The callback sweep is now a CLI-only concern detected
         // out-of-band by main.rs via std::env::args; RunParameters carries no
@@ -896,7 +896,7 @@ mod tests {
     fn test_query_info_combines_with_device_flags() {
         // Device-targeting flags are orthogonal to the action group.
         let params = cli_for(&[
-            "qmk_notifier",
+            "qmk-notifier",
             "--query-info",
             "--vendor-id",
             "0xFEED",
@@ -909,10 +909,10 @@ mod tests {
 
     #[test]
     fn test_message_and_list_still_parse() {
-        let params = cli_for(&["qmk_notifier", "hello"]);
+        let params = cli_for(&["qmk-notifier", "hello"]);
         assert!(matches!(params.command, RunCommand::SendMessage(s) if s == "hello"));
 
-        let params = cli_for(&["qmk_notifier", "--list"]);
+        let params = cli_for(&["qmk-notifier", "--list"]);
         assert!(matches!(params.command, RunCommand::ListDevices));
     }
 
@@ -921,10 +921,10 @@ mod tests {
         // Each combination must be a clap conflict error (Err, NOT a process exit —
         // try_get_matches_from returns Result).
         let cases: &[&[&str]] = &[
-            &["qmk_notifier", "--query-info", "msg"],
-            &["qmk_notifier", "--query-info", "--list-callbacks"],
-            &["qmk_notifier", "--list-callbacks", "msg"],
-            &["qmk_notifier", "--list", "--query-info"],
+            &["qmk-notifier", "--query-info", "msg"],
+            &["qmk-notifier", "--query-info", "--list-callbacks"],
+            &["qmk-notifier", "--list-callbacks", "msg"],
+            &["qmk-notifier", "--list", "--query-info"],
         ];
         for args in cases {
             assert!(
@@ -941,7 +941,7 @@ mod tests {
         // --verbose alone: not a clap error (group is required(false)), but
         // select_command finds no action ⇒ MissingRequiredParameter.
         let matches = build_cli_command()
-            .try_get_matches_from(["qmk_notifier", "--verbose"])
+            .try_get_matches_from(["qmk-notifier", "--verbose"])
             .expect("--verbose alone parses at the clap level");
         let result = parse_matches(&matches);
         assert!(
