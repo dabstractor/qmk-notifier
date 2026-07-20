@@ -18,7 +18,7 @@
               "type": "Task",
               "id": "P1.M1.T1",
               "title": "Fix mislabeled firmware-commit and binary-invocation references in source comments",
-              "status": "Researching",
+              "status": "Complete",
               "description": "The naming audit (architecture/naming_audit.md) found 3 comment-only references that name the wrong ecosystem artifact. Two in src/core.rs attribute firmware commit `01a51935` to `qmk-notifier` (hyphen = Rust crate) when it belongs to `qmk_notifier` (underscore = firmware repo, per PRD.md §4.4 line 210). One in src/main.rs shows `qmk_notifier` as the CLI binary name when the binary is `qmk-notifier`. All three are comment-only edits with zero runtime/compile impact.",
               "subtasks": [
                 {
@@ -39,7 +39,7 @@
                   "type": "Subtask",
                   "id": "P1.M1.T1.S2",
                   "title": "Fix main.rs binary-invocation comment reference (qmk_notifier → qmk-notifier)",
-                  "status": "Researching",
+                  "status": "Complete",
                   "story_points": 0.5,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md row `src/main.rs:88` classifies this as a CRATE (binary) reference that currently uses the FIRMWARE name (underscore). The comment text reads `(e.g. \\`qmk_notifier --list | head -1\\`)` — this is a shell example invoking the CLI binary, which is named `qmk-notifier` (hyphen), not the firmware module.\n2. INPUT: No data dependencies — standalone comment edit. Read `src/main.rs` around line 88 (the `reset_sigpipe_to_default` doc comment).\n3. LOGIC: In `src/main.rs`, change the binary-invocation example in the SIGPIPE comment from `qmk_notifier --list | head -1` to `qmk-notifier --list | head -1`. This is in the doc comment for `reset_sigpipe_to_default` (approximately line 88). The binary IS `qmk-notifier` (per Cargo.toml `name = \"qmk-notifier\"` and PRD §2). Do NOT change the `use qmk_notifier::` import at line 1 — that is the Cargo-derived library identifier and is invariant.\n4. OUTPUT: The SIGPIPE comment now correctly names the binary `qmk-notifier`. `cargo build` and `cargo test` must still pass.\n5. DOCS: none — inline comment edit only.",
@@ -55,14 +55,14 @@
               "type": "Task",
               "id": "P1.M1.T2",
               "title": "Optional: Align lib.rs cosmetic naming (test argv[0] strings and doc comment)",
-              "status": "Planned",
+              "status": "Researching",
               "description": "The naming audit found 10 test argv[0] strings and 1 doc comment in src/lib.rs that use the library identifier `qmk_notifier` where the binary name `qmk-notifier` would be more precise for clap test diagnostics. clap derives its display `bin_name` from argv[0], so test failure output currently renders `qmk_notifier` instead of the real binary `qmk-notifier`. These changes are purely cosmetic — they affect no parsing logic, no pass/fail outcomes, and no production behavior. Per delta_prd.md, these are 'Optional cosmetic polish (not required for correctness).'",
               "subtasks": [
                 {
                   "type": "Subtask",
                   "id": "P1.M1.T2.S1",
                   "title": "Update 10 lib.rs test argv[0] strings from qmk_notifier to qmk-notifier + align doc comment",
-                  "status": "Planned",
+                  "status": "Researching",
                   "story_points": 0.5,
                   "dependencies": [],
                   "context_scope": "CONTRACT DEFINITION:\n1. RESEARCH NOTE: architecture/naming_audit.md identifies 10 ARGV0-class references in src/lib.rs test code (lines ~876, 887, 899, 912, 915, 924, 925, 926, 927, 944) and 1 ambiguous doc comment (line ~154). All use `\"qmk_notifier\"` as the argv[0] first element passed to clap's `try_get_matches_from`. clap uses argv[0] only for the display `bin_name` in help/usage/error text — it does not affect argument parsing. The actual binary is `qmk-notifier` (Cargo.toml `name = \"qmk-notifier\"`).\n2. INPUT: No data dependencies. Read `src/lib.rs` and find all occurrences of `\"qmk_notifier\"` used as the first element in test arrays passed to `cli_for()` or `try_get_matches_from()`.\n3. LOGIC: Replace the argv[0] string `\"qmk_notifier\"` with `\"qmk-notifier\"` in all 10 test sites. These appear as the first element of arrays like `&[\"qmk_notifier\", \"--query-info\"]` → `&[\"qmk-notifier\", \"--query-info\"]`. Also optionally update the doc comment at line ~154 (`/// Build the clap \\`Command\\` for qmk_notifier`) to use `qmk-notifier` if the intent is 'the binary'. Do NOT change any `use qmk_notifier::` or `mod qmk_notifier` references — those are Cargo-derived library identifiers (invariant). Do NOT change `core::` or `error::` module references. After editing, run `cargo test` — all 72 tests MUST still pass (these changes affect only argv[0] display strings, not parsing logic).\n4. OUTPUT: Test failure/error output now renders the real binary name `qmk-notifier`. All 72 tests still pass. `cargo build` clean.\n5. DOCS: none — test-internal cosmetic edits, no user-facing/config/API surface change.",

@@ -85,7 +85,7 @@ fn main() {
 /// Rust's runtime sets SIGPIPE to `SIG_IGN`, which turns the next `println!` to
 /// a closed pipe into a panic (exit 101). Unix CLI tools are expected to die
 /// quietly with SIGPIPE (exit 141) when a downstream consumer exits early
-/// (e.g. `qmk_notifier --list | head -1`). This restores that behavior.
+/// (e.g. `qmk-notifier --list | head -1`). This restores that behavior.
 ///
 /// The FFI binding goes through the maintained [`libc`] crate (PRD Issue-4
 /// suggested-fix option (a)) rather than a hand-rolled `extern "C"` block.
